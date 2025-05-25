@@ -1,35 +1,52 @@
+
 local Iceberg = {}
 Iceberg.__index = Iceberg
 
-function Iceberg:new(x, y, direction)
-    local instance = {
-        x = x,
-        y = y,
-        width = 60,
-        height = 20,
-        speed = 50,
-        direction = direction or "right"
-    }
-    setmetatable(instance, Iceberg)
+function Iceberg:new(x, y, width, height, speed, direction)
+    local instance = setmetatable({}, Iceberg)
+    instance.x = x
+    instance.y = y 
+    instance.width = width
+    instance.height = height
+    instance.speed = speed
+    instance.direction = direction 
+    instance.color = {0.7, 0.85, 0.95, 1} 
     return instance
 end
-
+function Iceberg:useForIgloo()
+    if self.isFresh then
+        self.isFresh = false
+        self.color = self.usedColor 
+        return true 
+    end
+    return false 
+end
+function Iceberg:playerJumpedOff()
+    
+    
+    if self.direction == "right" then
+        self.direction = "left"
+    else
+        self.direction = "right"
+    end
+end
 function Iceberg:update(dt)
+    local screenWidth = love.graphics.getWidth()
     if self.direction == "right" then
         self.x = self.x + self.speed * dt
-        if self.x > love.graphics.getWidth() then
+        if self.x > screenWidth then
             self.x = -self.width
         end
-    else
+    else 
         self.x = self.x - self.speed * dt
-        if self.x < -self.width then
-            self.x = love.graphics.getWidth()
+        if self.x + self.width < 0 then
+            self.x = screenWidth
         end
     end
 end
 
 function Iceberg:draw()
-    love.graphics.setColor(0.7, 0.9, 1)
+    love.graphics.setColor(unpack(self.color))
     love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
 end
 

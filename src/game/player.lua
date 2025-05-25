@@ -1,267 +1,164 @@
+
 local Player = {}
 Player.__index = Player
 
-Player.downPressed = false
-Player.upPressed = false
+function Player:new(x, y, initialRow)
+    local instance = setmetatable({}, Player)
+    instance.x = x
+    instance.y = y 
+    instance.width = 20
+    instance.height = 20
+    instance.color = {1, 0.8, 0.2, 1} 
 
-function Player:new(x, y)
-    local instance = {
-        x = x,
-        y = y,
-        width = 20,
-        height = 20,
-        speed = 100,
-        onIceberg = false,
-        currentIceberg = nil,
-        jumping = false,
-        jumpTargetY = nil,
-        jumpDuration = 0.2,
-        jumpElapsed = 0
-    }
-    setmetatable(instance, Player)
+    instance.isJumping = false
+    instance.jumpStartY = 0
+    instance.jumpTargetY = 0
+    instance.jumpDuration = 0.2 
+    instance.jumpElapsedTime = 0
+    instance.airControlSpeed = 80 
+
+    instance.onIceberg = nil 
+    instance.currentRow = initialRow 
+    instance.targetRow = initialRow
+
     return instance
 end
 
-function Player:startJump(targetY)
-    self.jumping = true
-    self.jumpStartY = self.y
-    self.jumpTargetY = targetY
-    self.jumpElapsed = 0
-end
 
-function Player:update(dt, icebergs, level)
-    
-    if love.keyboard.isDown("left") then
-        self.x = self.x - self.speed * dt
-    elseif love.keyboard.isDown("right") then
-        self.x = self.x + self.speed * dt
+function Player:jumpToRow(targetRowIndex, getRowTopYFunc, numTotalRows)
+    if self.isJumping then return end 
+
+    if targetRowIndex < 1 or targetRowIndex > numTotalRows then
+        
+        return 
     end
 
+    self.isJumping = true
+    self.jumpStartY = self.y
     
-    if self.jumping then
-        self.jumpElapsed = self.jumpElapsed + dt
-        local t = math.min(self.jumpElapsed / self.jumpDuration, 1)
-        
-        self.y = self.jumpStartY + (self.jumpTargetY - self.jumpStartY) * t
+    self.jumpTargetY = getRowTopYFunc(targetRowIndex) - self.height
+    self.jumpElapsedTime = 0
+    self.onIceberg = nil 
+    self.targetRow = targetRowIndex
+    
+end
+
+function Player:update(dt, getIcebergsInRowFunc, gameOverCallback)
+    if self.isJumping then
+        self.jumpElapsedTime = self.jumpElapsedTime + dt
+        local progress = self.jumpElapsedTime / self.jumpDuration
 
         
         if love.keyboard.isDown("left") then
-            self.x = self.x - self.speed * dt
+            self.x = self.x - self.airControlSpeed * dt
         elseif love.keyboard.isDown("right") then
-            self.x = self.x + self.speed * dt
+            self.x = self.x + self.airControlSpeed * dt
         end
+        self.x = math.max(0, math.min(self.x, love.graphics.getWidth() - self.width))
 
-        
-        if t >= 1 then
-            self.jumping = false
-            self.jumpDuration = 0.2 
-
-            if self.fallingToWater then
-                self.fallingToWater = false
-                level:load()
-                return
-            end
-
-            
-            self.onIceberg = false
-            for _, iceberg in ipairs(icebergs) do
-                if self:isOnTopOf(iceberg) then
-                    self.onIceberg = true
-                    self.currentIceberg = iceberg
-                    break
-                end
-            end
-            local sobreSueloVisual = math.abs(self.y + self.height - (level.spawnY + 20)) < 5
-            local sobreSuelo = math.abs(self.y + self.height - level.sueloY) < 5
-            if not self.onIceberg and not sobreSueloVisual and not sobreSuelo then
-                level:load()
-            end
-        end
-        
-        return
-    end
-
-    
-    self.onIceberg = false
-    self.currentIceberg = nil
-    for _, iceberg in ipairs(icebergs) do
-        if self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width then
-            if math.abs(self.y + self.height - iceberg.y) < 5 then
-                self.onIceberg = true
-                self.currentIceberg = iceberg
-                break
-            end
-        end
-    end
-
-    
-    if self.onIceberg and self.currentIceberg then
-        self.x = self.x + self.currentIceberg.speed * dt * (self.currentIceberg.direction == "right" and 1 or -1)
-    end
-
-    local primerFilaY = level.sueloY + level.rowHeight
-
-    
-    if love.keyboard.isDown("up") then
-        if not self.upPressed then
-            self.upPressed = true
-
-            local sueloVisualY = level.spawnY + 20
-
-            
-            if math.abs(self.y + self.height - sueloVisualY) < 5 then
-                return
-            end
-
-            
-            if self.onIceberg and math.abs(self.y + self.height - (level.sueloY + level.rowHeight)) < 5 then
-                self:startJump(sueloVisualY - self.height)
-                return
-            end
-
-            
-            if math.abs(self.y + self.height - sueloVisualY) < 5 then
-                self.y = level.sueloY + level.rowHeight
-                return
-            end
-
-            
-            local targetY = nil
-            for _, iceberg in ipairs(icebergs) do
-                if self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width then
-                    if iceberg.y < self.y then
-                        if not targetY or iceberg.y > targetY then
-                            targetY = iceberg.y
-                        end
-                    end
-                end
-            end
-            if targetY then
-                self.y = targetY - self.height
-            elseif self.onIceberg or math.abs(self.y + self.height - level.sueloY) < 5 then
-                self.y = self.y - self.speed * dt
-            end
-        end
-    else
-        self.upPressed = false
-    end
-
-
-    
-    if love.keyboard.isDown("down") then
-        if not self.downPressed then
-            self.downPressed = true
-
-            local icebergDestino = nil
-            local filaActualY = nil
-
-            
-            for _, iceberg in ipairs(icebergs) do
-                if math.abs(self.y + self.height - iceberg.y) < 5 then
-                    filaActualY = iceberg.y
-                    break
-                end
-            end
-
-            if filaActualY then
-                
-                local filaDebajoY = filaActualY + level.rowHeight
-                for _, iceberg in ipairs(icebergs) do
-                    if math.abs(iceberg.y - filaDebajoY) < 5 then
-                        if self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width then
-                            icebergDestino = iceberg
-                            break
-                        end
-                    end
-                end
-            elseif math.abs(self.y + self.height - (level.spawnY + 20)) < 5 then
-                
-                local filaDebajoY = level.sueloY + level.rowHeight
-                for _, iceberg in ipairs(icebergs) do
-                    if math.abs(iceberg.y - filaDebajoY) < 5 then
-                        if self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width then
-                            icebergDestino = iceberg
-                            break
-                        end
-                    end
-                end
-            end
-
-            if icebergDestino then
-                
-                self:startJump(icebergDestino.y - self.height)
-                self.fallingToWater = false
-            else
-                
-                local fondoAgua = love.graphics.getHeight() - self.height
-                self:startJump(fondoAgua)
-                self.fallingToWater = true
-                self.jumpDuration = 0.4 
-            end
-        end
-    else
-        self.downPressed = false
-    end
-
-    self.x = math.max(0, math.min(self.x, love.graphics.getWidth() - self.width))
-    self.y = math.max(0, math.min(self.y, love.graphics.getHeight() - self.height))
-
-    
-    local debajoSuelo = self.y + self.height > level.sueloY
-    local noEnSuelo = math.abs(self.y + self.height - level.sueloY) > 1
-
-    local enAgua = false
-    if debajoSuelo and noEnSuelo then
-        
-        local filaY = nil
-        for _, iceberg in ipairs(icebergs) do
-            if math.abs(self.y + self.height - iceberg.y) < 5 then
-                filaY = iceberg.y
-                break
-            end
-        end
-
-        if filaY then
-            
-            local sobreIceberg = false
-            for _, iceberg in ipairs(icebergs) do
-                if iceberg.y == filaY then
-                    if self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width then
-                        sobreIceberg = true
-                        break
-                    end
-                end
-            end
-            if not sobreIceberg then
-                enAgua = true
-            end
+        if progress < 1 then
+            self.y = self.jumpStartY + (self.jumpTargetY - self.jumpStartY) * progress
         else
+            self.y = self.jumpTargetY
+            self.isJumping = false
+            self.currentRow = self.targetRow
+
+            local icebergsInCurrentRow = getIcebergsInRowFunc(self.currentRow)
+            local landedIceberg = self:_checkLanding(icebergsInCurrentRow)
+
+            if landedIceberg then
+                self.onIceberg = landedIceberg
+                self.y = landedIceberg.y - self.height
+
+                if landedIceberg.useForIgloo and landedIceberg:useForIgloo() then
+                    self.iglooBlocksCollected = (self.iglooBlocksCollected or 0) + 1
+                    
+                end
+            else
+                gameOverCallback()
+            end
+        end
+    else
+        
+        if self.onIceberg then
             
-            enAgua = true
+            if love.keyboard.isDown("left") then
+                self.x = self.x - self.airControlSpeed * dt
+            elseif love.keyboard.isDown("right") then
+                self.x = self.x + self.airControlSpeed * dt
+            end
+
+            
+            self.x = math.max(0, math.min(self.x, love.graphics.getWidth() - self.width))
+
+            
+            local moveSpeed = self.onIceberg.speed * dt
+            if self.onIceberg.direction == "right" then
+                self.x = self.x + moveSpeed
+            else
+                self.x = self.x - moveSpeed
+            end
+
+            
+            self.x = math.max(0, math.min(self.x, love.graphics.getWidth() - self.width))
+
+            
+            if self.x < self.onIceberg.x or self.x + self.width > self.onIceberg.x + self.onIceberg.width then
+                print("¡El jugador se cayó del iceberg al agua!")
+                self.onIceberg = nil
+                gameOverCallback()
+                return
+            end
+        
+            
+        end
+    end
+end
+
+function Player:_checkLanding(icebergsInRow)
+    local playerFeetY = self.y + self.height
+    print(string.format("Iniciando _checkLanding. Jugador X: %.2f, Pies Y: %.2f", self.x, playerFeetY))
+    if #icebergsInRow == 0 then
+        print("  No hay icebergs en la fila para comprobar.")
+        return nil
+    end
+
+    for i, iceberg in ipairs(icebergsInRow) do
+        local playerRight = self.x + self.width
+        local icebergRight = iceberg.x + iceberg.width
+
+        
+        local overlapsX = playerRight > iceberg.x and self.x < icebergRight
+        
+        
+        
+        
+        local feetOnTop = math.abs(playerFeetY - iceberg.y) < 5 
+
+        print(string.format("  Comprobando Iceberg #%d: X[%.2f-%.2f], Ancho: %.2f, SupY: %.2f", i, iceberg.x, icebergRight, iceberg.width, iceberg.y))
+        print(string.format("    overlapsX: %s, feetOnTop: %s (PlayerFeetY: %.2f vs IcebergSupY: %.2f, Diff: %.2f)",
+                            tostring(overlapsX), tostring(feetOnTop), playerFeetY, iceberg.y, playerFeetY - iceberg.y))
+
+        if overlapsX and feetOnTop then
+            print(string.format("    ¡ÉXITO! Aterrizaje detectado en Iceberg #%d.", i))
+            return iceberg
         end
     end
 
-    if enAgua then
-        level:load() 
-    end
-end
-
-function Player:isColliding(iceberg)
-    return self.x + self.width > iceberg.x and
-           self.x < iceberg.x + iceberg.width and
-           self.y + self.height > iceberg.y and
-           self.y < iceberg.y + iceberg.height
-end
-
-function Player:isOnTopOf(iceberg)
-    local isHorizontallyAligned = self.x + self.width > iceberg.x and self.x < iceberg.x + iceberg.width
-    local isVerticallyAligned = math.abs(self.y + self.height - iceberg.y) < 5
-    return isHorizontallyAligned and isVerticallyAligned
+    print("  _checkLanding finalizado: NO SE ENCONTRÓ ATERRIZAJE.")
+    return nil
 end
 
 function Player:draw()
-    love.graphics.setColor(1, 1, 1)
+    love.graphics.setColor(unpack(self.color))
     love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
+
+    
+    
+    
+    
+    
+    
 end
 
 return Player
