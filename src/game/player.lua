@@ -20,6 +20,24 @@ function Player:new(x, y, initialRow)
     instance.currentRow = initialRow 
     instance.targetRow = initialRow
 
+    
+    instance.spriteSheet = love.graphics.newImage("assets/sprites/player_walk.png")
+    instance.frameWidth = 20
+    instance.frameHeight = 20
+    instance.frames = {}
+    instance.currentFrame = 1
+    instance.animationTimer = 0
+    instance.animationSpeed = 0.12
+    instance.numFrames = 4
+    instance.facing = "right" 
+
+    for i = 0, instance.numFrames - 1 do
+        table.insert(instance.frames, love.graphics.newQuad(
+            i * instance.frameWidth, 0, instance.frameWidth, instance.frameHeight,
+            instance.spriteSheet:getDimensions()
+        ))
+    end
+
     return instance
 end
 
@@ -27,12 +45,6 @@ end
 function Player:jumpToRow(targetRowIndex, getRowTopYFunc, numTotalRows)
     if self.isJumping then return end 
     if targetRowIndex < 1 or targetRowIndex > numTotalRows then return end
-
-    
-    
-    
-    
-
     self.isJumping = true
     self.jumpStartY = self.y
     self.jumpTargetY = getRowTopYFunc(targetRowIndex) - self.height
@@ -142,6 +154,27 @@ function Player:update(dt, getIcebergsInRowFunc, gameOverCallback)
             self.x = math.max(0, math.min(self.x, love.graphics.getWidth() - self.width))
         end
     end
+
+    local moving = false
+    if love.keyboard.isDown("left") then
+        self.x = self.x - self.airControlSpeed * dt
+        moving = true
+        self.facing = "left"
+    elseif love.keyboard.isDown("right") then
+        self.x = self.x + self.airControlSpeed * dt
+        moving = true
+        self.facing = "right"
+    end
+
+    if moving then
+        self.animationTimer = self.animationTimer + dt
+        if self.animationTimer >= self.animationSpeed then
+            self.animationTimer = self.animationTimer - self.animationSpeed
+            self.currentFrame = (self.currentFrame % self.numFrames) + 1
+        end
+    else
+        self.currentFrame = 1 
+    end
 end
 
 function Player:_checkLanding(icebergsInRow)
@@ -179,17 +212,14 @@ function Player:_checkLanding(icebergsInRow)
 end
 
 function Player:draw()
-    love.graphics.setColor(unpack(self.color))
-    love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
-
-    
-    local blockW, blockH = 30, 20
-    local blocks = player and player.iglooBlocksCollected or 0
-    for i = 1, blocks do
-        love.graphics.setColor(0.9, 0.9, 1)
-        love.graphics.rectangle("fill", 30 + (i-1)*(blockW+5), 60, blockW, blockH)
-        love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.rectangle("line", 30 + (i-1)*(blockW+5), 60, blockW, blockH)
+    if self.spriteSheet and self.frames[self.currentFrame] then
+        love.graphics.setColor(1,1,1)
+        local sx = self.facing == "left" and -1 or 1
+        local ox = self.facing == "left" and self.frameWidth or 0
+        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x + ox, self.y, 0, sx, 1)
+    else
+        love.graphics.setColor(unpack(self.color))
+        love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
     end
 end
 
