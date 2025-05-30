@@ -1,3 +1,5 @@
+## Autor: Carlos Pereira 30211766
+
 ## Características
 
 - Mecánicas de juego clásicas con gráficos y sonido actualizados.
@@ -39,6 +41,7 @@ frostbite-remastered
 │   ├── game              # Lógica y clases del juego
 │   │   ├── player.lua    # Clase del jugador
 │   │   ├── iceberg.lua   # Clase de témpano de hielo
+│   │   ├── fish.lua      # Clase de pez
 │   │   ├── enemy.lua     # Clase de enemigo
 │   │   └── level.lua     # Gestión de niveles
 │   └── assets            # Recursos del juego
